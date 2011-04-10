@@ -1,0 +1,140 @@
+﻿ideas
+
+BazAR: A vision based fast detection library c/c++
+BazAR is a computer vision library based on feature points detection and matching. 
+In particular, it is able to quickly detect and register known planar objects in images. 
+Well adapted to Augmented Reality applications, it is the result of advanced computer vision research. 
+
+1- اجعل الدالة تتعرف فقط على الزوايا الحادة للاصابع و عند اختلال الشرط اعمل بريك على الاقل اجعل الابهام و اصبع اخر ظاهرات
+
+2- يوجد في صفحة "ploygon properties"بعض الخصائص التي قد تفيد في التفريق ما بين اليد و الوجه
+
+3- توجد دالة في find contours mode (CV_CHAIN_CODE) يمكنها تمثيل شكل اليد بواسطة اتجاهات اقرء عنها في الكتاب ص 260
+
+4- توجد دوال لايجاد الكونتورس خطوة بخطوة لفحصها اولا باول بدلا من ايجادها كاملة و ترجع تفحص من جديد
+
+5- كلما كان قيمة ApproxPoly قليلة كلما كان شكل افضل و ادق و لذلك الكتاب يقول ان القيم الافتراضية يجب ان تكون كسرية
+
+6- in this link
+http://www.cnblogs.com/xrwang/archive/2010/03/03/ImageFeatureDetection.html
+يوجد العديد من الطرق لمعرفة المميزات شوف بالذات عن الزوايا و اكتشافها
+و شوف ايضا 
+http://www.cnblogs.com/xrwang/archive/2010/04/27/GrabCut.html
+http://www.cnblogs.com/xrwang/archive/2010/04/12/BackgroundGenerationAndForegroundDetectionPhase3.html
+http://www.cnblogs.com/xrwang/archive/2010/02/21/ForegroundDetection.html
+
+
+moments emgu 
+http://www.emgu.com/forum/viewtopic.php?f=7&t=650&p=1841&hilit=hu+moments#p1841
+
+moments and matrix emgu
+http://www.emgu.com/forum/viewtopic.php?f=2&t=658&p=1853&hilit=hu+moments#p1853
+
+hu moments are rotation invariant,
+
+Hello!
+I will simplify my question. I am developing a real time
+shap-recognition system. To make the detection of the shapes invariant
+from rotation, position and size, I use Hu Moments.
+My problem is that the Hu Moments of DIFFERENT shapes are TOO
+SIMILAR. For example, the 7 Hu Moments for the shapes A and B and the
+diference between them.
+
+
+HuA1 = 0,216783731812
+HuB1 = 0,218630105067
+epsilon1=-0,001846373255
+
+HuA2 = 0,0184099262926
+HuB2 = 0,0214116257491
+epsilon2=-0,0030016994565
+
+HuA3 =0,0002666440857000
+HuB3 =0,0000703675972985
+epsilon3=0,0001962764884015
+
+HuA4 =0,0000200588838553
+HuB4 =0,0000105561444682
+epsilon4=0,0000095027393871
+
+HuA5 =-0,000000001441510101410
+HuB5 = 0,000000000267414405049
+epsilon5=-0,000000001708924506459
+
+HuA6 =-0,0000270245029794
+HuB6 = 0,0000011333342041
+epsilon6=-0,0000281578371835
+
+HuA7 = 0,000000000272209621297
+HuB7 = 0,000000001061250976640
+epsilon7=-0,000000000789041355343
+
+I wanted to use the Hu Moments as a 7-dimensional space and compare
+them with an Euclidean distance, matching the shape if it falls below
+a given epsilon, but I can't set a proper epsilon since the minimum
+epsilon needed for the right shape to be recogniced makes other shapes
+false positives as well. Perhaps I am misusing the Hu Momments? How
+can I avoid this? Perhaps I should try a different approach?
+Thank you in advance!!
+
+
+ٍ
+thanks paramesh,
+i tried contrast stretching, take max and min values of image (8 bit) and
+stretch them to 0-255. does this give the same? by visual inspection i dont get
+much of an idea
+
+
+///////////////////////////////////////////////////////////////////////////////
+void StretchContrast(IplImage *img,int *pxls){
+int min,max,p,q;
+min=255;max=0;
+
+
+// -->(x=row)
+// |
+// v(y=col)
+
+/*
+cout << "img->height " <<img->height<<endl;
+cout << "img->width " <<img->width<<endl;
+cout << "img->widthStep " <<img->widthStep<<endl;
+cout << "img->imageSize " <<img->imageSize<<endl;
+
+*/
+
+// find min, max
+for (int y=0;y< img->height;y++)
+for (int x=0;x< img->widthStep;x++){
+p=((uchar*)(img->imageData+img->widthStep*y))[x];
+//cout << "pixels "<<y<< ","<<x <<"= " << p <<endl;
+if(p < min) min=p;
+if(p > max) max=p;
+}
+
+//cout <<"min " << min<<endl;
+//cout <<"max " << max<<endl;
+
+
+// stretch contrast with y=mx+c
+float m,c;
+m=(255-0)/(float)(max-min);
+c=-m*min;
+//cout<< "m " <<m<<endl;
+//cout<< "c " <<c<<endl;
+
+for (int y=0;y<img->height;y++)
+for (int x=0;x<img->widthStep;x++){
+q=((uchar*)(img->imageData +img->widthStep*y))[x];
+*(pxls
++x+y*img->widthStep)=(img->imageData+img->widthStep*y)[x]=(m*q+c);
+//cout<<" pixels new "<<y<< ","<<x<<"= "<<(int)(uchar)*(pxls
++x+y*img->widthStep)<<endl;
+//cout<<" pixels new "<<y<< ","<<x<<"=
+"<<(int)(uchar)(img->imageData+img->widthStep*y)[x]<<endl;
+}
+
+//////////////////////////////////////////////////////////////
+
+
+indika
