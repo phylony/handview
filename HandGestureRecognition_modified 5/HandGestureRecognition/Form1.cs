@@ -10,1248 +10,784 @@ using System.Windows.Forms;
 using Emgu.CV.Structure;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
-using Emgu.CV.VideoSurveillance;
 
-using HandGestureRecognition.SkinDetector;
+
 using System.Collections;
+using System.Runtime.InteropServices;
 
 
 namespace HandGestureRecognition
 {
+    /// <summary>
+    /// The Hand Detection class 
+    /// </summary>
     public partial class Form1 : Form
     {
 
-        Seq<Point> convexityHull;
-        Seq<MCvConvexityDefect> defects;
 
-        Random rand = new Random();
-
-     
+        /// <summary>
+        /// Set /Get the camera properties 
+        /// </summary>
         Capture grabber;
+
+        /// <summary>
+        /// Extract the skin  color like objects from an image
+        /// </summary>
         AdaptiveSkinDetector detector;
+
+        /// <summary>
+        /// Set /Get the image  width 
+        /// </summary>
+        int width;
         
-        int numberOfPeaks = 0;
-        int numberOfValleys = 0;
-        int numberOfpoints = 20 ;
+        /// <summary>
+        /// Set /Get the image  height 
+        /// </summary>
+        int height,
+            count = 0;
+        
+        /// <summary>
+        /// Used to determine the value of threshold
+        /// <value> default value 80 </value>
+        /// </summary>
         int threshold = 80;
+        
+        /// <summary>
+        /// Used to Determine the number of finger peak
+        /// </summary>
+        int numberOfPeaks = 0;
+
+        /// <summary>
+        ///  Used to Determine the number of valley between 2 fingers
+        /// </summary>
+        int numberOfValleys = 0;
+
+        /// <summary>
+        /// Number of detected hands
+        /// </summary>
+        int numberOfHands = 0;
+
+        /// <summary>
+        /// Number of hands required to be detected
+        /// </summary>
+        int hand_detected = 1,
+            kernel_size = 3;
+
+
+
+        /// <summary>
+        /// area of recatangle
+        /// </summary>
         double area = 0.0;
-        double[] maxValues,
-                 minValues;
-        Point[] minLocation,
-                maxLocation;
 
-        int count = 0;
+        /// <summary>
+        /// Determine the accuracy when approximate a contour to a polygon
+        /// <value>default value id 20</value>
+        /// </summary>
+        double accuracy = 20.0d,
+               min_length = 0.0,
+               max_length = 0.0;
+
+        /// <summary>
+        /// Determine the time interval between the current frame and the next frame
+        /// </summary>
+        double elapsed_time;
 
 
-        Hsv hsv_min;
-        Hsv hsv_max;
-        Ycc YCrCb_min;
-        Ycc YCrCb_max;
+        DIST_TYPE dt = DIST_TYPE.CV_DIST_L2;
+        
 
         Bgr color_blue = new Bgr(Color.DarkBlue);
         Bgr color2_brown = new Bgr(Color.Brown);
 
         Gray thresholdValue = new Gray(1);
         Gray MaxValue = new Gray(255);
-        Gray cannyThreshold = new Gray(20);
-        Gray cannyThresholdLinking = new Gray(70);
-        Gray colorGray = new Gray(100);
 
-        Point[] pointsArray;
+        /// <summary>
+        /// Determine the centre of a circle
+        /// </summary>
+        PointF center_pt;
 
-        Image<Gray, byte> oldImage;
-        Image<Gray, byte> newImageG;
-        Image<Bgr, byte> newImage;
+        static Image<Gray, byte> newImageG;
+        static Image<Gray, byte> current_image;
         Image<Gray, byte> tempImage;
-        Image<Gray, byte> tempImage2;
-        Image<Gray, byte> skin;
-        Image<Gray, Single> distTransform;
-        Image<Bgr, byte> hand_sep;
-        Image<Bgr, byte> head_sep;
-        Seq<Point> hull;
-        Rectangle rect = new Rectangle();
-        Rectangle roi_rect = new Rectangle();
-        DIST_TYPE dt = DIST_TYPE.CV_DIST_L2;
-        int kernel_size = 3;
+    
+
+
+        static Image<Bgr, byte> newImage;
+
+        HandTracking y;
+
+       System.Diagnostics.Stopwatch sw;
+
+
+        List<Contour<Point>> handCandiate;
+        List<Contour<Point>> detected_hand;
+        List<HandTracking> x;
+
+        Dictionary<int, PointF> hand_centers;
+
        
-        bool flag = false;
-        List<Point> fingerCandiate = new List<Point>();
-        List<Contour<Point>> handCandiate = new List<Contour<Point>>();
-        List<KeyValuePair<Point, bool>> significantPts = new List<KeyValuePair<Point, bool>>();
-        
+        /// <summary>
+        /// Get <c> current_image </c> 
+        /// it's a read only property 
+        /// </summary>
+        public static Image<Gray, byte> Current_Image
+        {
+            get
+            {
+                return current_image;
+            }
 
-        MCvBox2D box;
-        
-        private static MCvFont _font = new MCvFont(Emgu.CV.CvEnum.FONT.CV_FONT_HERSHEY_SIMPLEX, 1.0, 1.0);
+        }
 
-        int min_distance = 5;
-        int numbrt_of_features = 100;
-        int numbrt_of_features_tracked = 30;
-        double quality = 0.01;
-        int block_size = 5;
-        List<PointF> best_tracked_feature_list = new List<PointF>();
-        private const int c_WinSize = 10;
-        int tempX = 0,tempY = 0;
-        PointF[] best_tracked_feature_Array ;
-        PointF[][] foundFeaturesInChannels = null;
-        bool start_tracking = false;
-        /* variables for optical flow traking algorithem */
-        Image<Gray, byte> prev_image;
-        Image<Gray, byte> current_image;
-    //    Image<Gray, byte> prev_image_pyramid;
-     //   Image<Gray, byte> current_image_pyramid;
-        PointF[] previous_features;
-        PointF[] current_features;
-        byte  [] status;
-        float [] point_error;
-        Size window_size;
-        MCvTermCriteria criteria;
-        const int levels = 5;
-        List<PointF> features_need_relocate;
-        int height;
-        int width;
-      //  Emgu.CV.CvEnum.LKFLOW_TYPE algo_flags = Emgu.CV.CvEnum.LKFLOW_TYPE.DEFAULT;
-        PointF center_pts;
-        System.Diagnostics.Stopwatch sw;
-        double elapsed_time;
-        Dictionary<int, double> features;
+        /// <summary>
+        /// Get or Set  <c> NewImageG </c> 
+        /// it's read / write property 
+        /// </summary>
+        public static Image<Gray, byte> NewImageG
+        {
+            get
+            {
+                return newImageG;
+            }
+            set
+            {
+                newImageG = value;
+            }
+
+        }
+
+        /// <summary>
+        /// Get or Set  <c> NewImage </c> 
+        /// it's read / write property 
+        /// </summary>
+        public static Image<Bgr, byte> NewImage
+        {
+            get
+            {
+                return newImage;
+            }
+            set
+            {
+                newImage = value;
+            }
+
+        }
+
+        /// <summary>
+        /// Class only constructor
+        /// </summary>
         public Form1()
         {
+            
+
             InitializeComponent();
 
            
 
-            grabber = new Emgu.CV.Capture();//@"c:\\test1.wmv"
+            x = new List<HandTracking>(2);
+            handCandiate = new List<Contour<Point>>();
+            detected_hand = new List<Contour<Point>>();
 
-        //    grabber.FlipHorizontal = true;
-       //     grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_WIDTH, 320);
-        //    grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT, 240);
-           
+            hand_centers = new Dictionary<int, PointF>(2);
 
-             height = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT);
-             width = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_WIDTH);
+            grabber = new Emgu.CV.Capture();
 
-          
-          
+            y = null;
+
+
+            height = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT);
+            width = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_WIDTH);
+
+
+
             detector = new AdaptiveSkinDetector(1, AdaptiveSkinDetector.MorphingMethod.NONE);
-            hsv_min = new Hsv(0, 45, 0); 
-            hsv_max = new Hsv(20, 255, 255);            
-            YCrCb_min = new Ycc(0, 131, 80);
-            YCrCb_max = new Ycc(255, 185, 135);
-            box = new MCvBox2D();
 
 
-           
-
-            hand_sep = new Image<Bgr,byte>(width,height);
-            head_sep = new Image<Bgr,byte>(width,height);
-      //      oldImage = new Image<Gray, Byte>(width, height);
-        //    newImage = new Image<Bgr, Byte>(width, height);
             tempImage = new Image<Gray, Byte>(width, height);
-            tempImage2 = new Image<Gray, Byte>(width, height);
 
-         //   distTransform = new Image<Gray, Single>(width, height);
-            rect = new Rectangle(20,20, 250, 250);
-            features_need_relocate = new List<PointF>();
-            features = new Dictionary<int, double>();
-            sw = new System.Diagnostics.Stopwatch();
-            skin = new Image<Gray, byte>(width, width);
-        //    MessageBox.Show(height+ " "+width);
-
-            prev_image = new Image<Gray, byte>(width, height);
             current_image = new Image<Gray, byte>(width, height);
-            criteria = new MCvTermCriteria(20, 0.3);
-            window_size = new System.Drawing.Size(10, 10);
+
             newImageG = new Image<Gray, byte>(width, height);
-            Application.Idle += new EventHandler(FrameGrabber);                        
+
+            sw = new System.Diagnostics.Stopwatch();
+
+            Application.Idle += new EventHandler(FrameGrabber);
         }
 
+        /// <summary>
+        /// the main function in this class 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         void FrameGrabber(object sender, EventArgs e)
         {
-            
-            newImage =  grabber.QueryFrame();//new Image<Bgr, byte>("c:\\test.jpg");
+            sw.Start();
+            newImage = grabber.QueryFrame();
 
             count++;
             if (newImage != null)
             {
                 current_image = newImage.Convert<Gray, byte>();
                 detector.Process(newImage, tempImage);
+
                 tempImage = tempImage.ThresholdBinary(thresholdValue, MaxValue);
                 tempImage = tempImage.Dilate(2);
                 tempImage = tempImage.SmoothMedian(3);
-                newImageG = current_image.ThresholdBinary(new Gray(threshold), new Gray(255d));
-                newImageG = newImageG.Not();
+
+                newImageG = current_image.ThresholdBinaryInv(new Gray(threshold), new Gray(255d));
                 newImageG = newImageG.And(tempImage);
                 newImageG = newImageG.Dilate(1);
-                if (true)
+
+                if (numberOfHands > 0)
                 {
-                    if (!flag)
+                    int tt = numberOfHands;
+                    for (int i = 0; i < tt; i++)
                     {
-                        
-                        newImage.Draw(rect, color_blue, 2);
-                        //detector.Process(newImage, tempImage);
-                        //tempImage = tempImage.ThresholdBinary(thresholdValue, MaxValue);
-                        //tempImage = tempImage.Dilate(2);
-                        //tempImage = tempImage.SmoothMedian(3);
-                    }
-                    else
-                    {
-                        if (start_tracking)
+                        if (x[i] != null)
                         {
-
-                            Console.WriteLine();
-                            sw.Start();
-                            OpticalFlow.PyrLK(prev_image, current_image, previous_features, window_size, levels, criteria, out current_features, out status, out point_error);
-                            sw.Stop();
-                            elapsed_time = sw.Elapsed.TotalMilliseconds;
-                            Swap(ref current_image, ref prev_image);
-                            TrackingAndRelcocating(previous_features, current_features);
-                           // var sorted_dictionary = (from entry in features orderby entry.Value ascending select entry);
-                           List<double> values = new List<double>(features.Values);
-                            values.Sort();
-                            int key = (from k in features where k.Value == values.ElementAt(0) select k.Key).FirstOrDefault();
-                          
-                            
-
-                            center_pts = current_features[key];
-                            rect.X = (int)center_pts.X - rect.Width / 2;
-                            rect.Y = (int)center_pts.Y + rect.Height / 2;
-                            //current_image.SetZero();
-                            int cnt = values.Count;
-                        //    center_pts = current_features[key];
-                            //current_image.SetZero();
-                            int cnt2 = features.Count;
-                            Console.WriteLine("number inside dictionary " + cnt2);
-                            best_tracked_feature_Array = FindSkinFeatures(current_features, status);// features with skin colors
-
-                            for (int ii = 1; ii < 4; ii++)// remove 10% most far features from center point 
+                            try
                             {
-                                key = (from k in features where k.Value == values.ElementAt(cnt - ii) select k.Key).FirstOrDefault();
-                                if (!this.features_need_relocate.Contains(current_features[key]))
-                                    this.features_need_relocate.Add(current_features[key]);
+                                x[i].StartTracking(elapsed_time);
                             }
-                        //    best_tracked_feature_Array = FindSkinFeatures(current_features,status);// features with skin colors
-                            //  Console.WriteLine(best_tracked_feature_Array.Length);
-                            //   best_tracked_feature_Array = best_tracked_feature_list.ToArray();
-                            if (best_tracked_feature_Array.Length == 0)
+
+                     
+                            catch(Exception ex)
                             {
-                                MessageBox.Show("the program will be crashed");
-                                Application.Exit();
+                                Console.WriteLine("lost traking : number  of hands {0} & list x {1}", numberOfHands, x.Count);
+                                int id = x[i].id;
+                                hand_centers[id] = x[i].new_center_pt;
+                                hand_centers.Remove(id);
+                                x.RemoveAt(id);
+                                --numberOfHands;
 
                             }
-                            foreach (PointF p in best_tracked_feature_Array)
-                            {
-
-                                newImage.Draw(new CircleF(p, 3.0f), color2_brown, -1);
-                                //tt[jj].X = (int)p.X;
-                                //tt[jj].Y = (int)p.Y;
-                                //jj++;
-                                // Console.WriteLine(count++);
-                            }
-                             
-                          //   box = PointCollection.MinAreaRect(best_tracked_feature_Array);
-                           //  center_pts = box.center;
-                            newImage.Draw(new CircleF(center_pts, 10f), new Bgr(255, 0, 0), -1);
-                            newImage.Save("H:\\debug\\test" + count + ".jpg");
-                        //    newImage.Draw(box, new Bgr(255, 0, 0), 1);
-                        //    RelocatePoints(best_tracked_feature_Array, current_features, center_pts);
-                            RelocatePoints(features_need_relocate.ToArray(), center_pts);
-                            
-                            previous_features = best_tracked_feature_list.ToArray();
-
-                            //  Array.Clear(previous_features, 0, previous_features.Length);
-                            //previous_features = null;
-                           // Swap(ref best_tracked_feature_Array, ref previous_features);
-                            current_image.Dispose();
-                          //  current_image = null;
-                            current_features = null;
-                            features_need_relocate.Clear();
-                            best_tracked_feature_list.Clear();
-                            this.features.Clear();
-                            values.Clear();
-                          //  best_tracked_feature_Array = best_tracked_feature_list.ToArray();
-                            //   Point [] tt = new Point [best_tracked_feature_30.Length];
-                      //   int jj = 0;
-                            //newImage.Draw(rect, color_blue, 2);
-                            //foreach (PointF p in foundFeaturesInChannels[0])
-                            //{
-
-                            //    tempImage2.Draw(new CircleF(p, 3.0f), new Gray(255), 1);
-                            //    //tt[jj].X = (int)p.X;
-                            //    //tt[jj].Y = (int)p.Y;
-                            //    //jj++;
-                            //    // Console.WriteLine(count++);
-                            //}
-
-
-                            //   Array.Sort(best_tracked_feature_30, new PointSort(PointSort.Mode.X));
-                            //  Array.Sort(best_tracked_feature_30, new PointSort(PointSort.Mode.Y));
-                            //    PointF center_pts = FindCentroid(best_tracked_feature.ToArray());
-                            //int temp_length = best_tracked_feature_30.Length;
-                            //for (int i = 0; i < temp_length - 1; i++)
-                            //{
-                            //    tempX +=(int) (best_tracked_feature_30[i + 1].X + best_tracked_feature_30[i].X);
-                            //    tempY += (int)(best_tracked_feature_30[i + 1].Y + best_tracked_feature_30[i].Y); 
-                            //}
-                            //imageBox2.Image = newImageG;
-                            //imageBoxFrameGrabber.Image = tempImage2;
-                            //    best_tracked_feature = Utility.DouglasPeuckerReduction(best_tracked_feature, 10.0);
-                            //        Contour<Point> ff =(Contour<Point>) tt;
-
-                         //   box = PointCollection.MinAreaRect(best_tracked_feature_Array);
-                            //tempImage2.Draw(box, new Gray(255), 1);
-
-                            //using (MemStorage mem = new MemStorage())
-                            //{
-                            //    best_tracked_feature = PointCollection.convexhull(best_tracked_feature_30, 
-                            //                                                        mem, 
-                            //                                                        Emgu.CV.CvEnum.ORIENTATION.CV_CLOCKWISE).ToList();
-                            //}
-                            //if (true)
-                            //{
-                            //    MessageBox.Show("d u want to show polyline");
-                            //    tempImage2.DrawPolyline(tt, true, new Gray(255), 1);
-                            //}
-                            //      tempImage2.Draw(new Rectangle((int)center_pts.X - 3, (int)center_pts.Y - 3, 7, 7), new Gray(255), -1);
-                            // draw_polyline(best_tracked_feature);
-                         //   center_pts = box.center;//FindCentroid(best_tracked_feature.ToArray());
-                         //   tempImage2.Draw(new CircleF(center_pts, 3.0f), new Gray(150), -1);
-                         //   RelocatePoints(best_tracked_feature_list.ToArray(), foundFeaturesInChannels[0], center_pts);
-                         // //  imageBox2.Image = newImageG;
-                         ////   imageBoxFrameGrabber.Image = tempImage2;
-                         //   //    Console.WriteLine(center_pts.X + " " + center_pts.Y);
-                         //   //tempX = tempY = temp_length = 0;
-                         //   previous_features = best_tracked_feature_list.ToArray();
-                         //   best_tracked_feature_list.Clear();
-                         
-                         ////   flag = false;
-                         //   start_tracking = true;
-                         //   prev_image = current_image;
-                         //   Console.WriteLine("cls");
-                            //  Application.Exit();
                         }
-                 //       else
-                   //     {
-                         //   Console.WriteLine();
-                         //   OpticalFlow.PyrLK(prev_image, current_image, previous_features, window_size, levels, criteria, out current_features, out status, out point_error);
-                         //   Swap(ref current_image, ref prev_image);
-                         //   current_image.SetZero();
 
-                         //   best_tracked_feature_Array = FindSkinFeatures(current_features);// features with skin colors
-                         // //  Console.WriteLine(best_tracked_feature_Array.Length);
-                         ////   best_tracked_feature_Array = best_tracked_feature_list.ToArray();
-                         //   MCvBox2D box = PointCollection.MinAreaRect(best_tracked_feature_Array);
-                         //   PointF center_pts = box.center;
-                         //   newImage.Draw(new CircleF(center_pts, 10f), new Bgr(255,0,0), -1);
-                         //   RelocatePoints(best_tracked_feature_Array, current_features, center_pts);
-                        
-                         //   best_tracked_feature_Array = best_tracked_feature_list.ToArray();
-
-                         // //  Array.Clear(previous_features, 0, previous_features.Length);
-                         //   previous_features = null;
-                         //   Swap(ref best_tracked_feature_Array, ref previous_features);
-                            
-                         //   best_tracked_feature_list.Clear();
-                         //   
-                         //   Array.Clear(current_features, 0, current_features.Length);
-                         //   Array.Clear(best_tracked_feature_Array, 0, best_tracked_feature_Array.Length);
-
-                            
-
-                      //  }
                     }
 
                 }
-                #region detection
-                else /*if(count > 0)*/
+
+
+                if (numberOfHands < hand_detected)
                 {
-        
-                    //detector.Process(newImage, tempImage);
-                    //tempImage = tempImage.ThresholdBinary(thresholdValue, MaxValue);
-                    //tempImage = tempImage.Dilate(2);
-                    //tempImage = tempImage.SmoothMedian(3);
+                    detected_hand = HandDetection(newImageG);
+                    if (detected_hand.Any())// any elements in the list
+                    {
+                        foreach (Contour<Point> h in detected_hand)
+                        {
+                            if (numberOfHands < hand_detected)
+                            {
 
-                    //newImageG = newImage.Convert<Gray, byte>();
+                                y = new HandTracking(current_image.Width, current_image.Height, hand_centers[numberOfHands]);
 
-                    //newImageG = newImageG.ThresholdBinary(new Gray(threshold), new Gray(255d));
-                    //newImageG = newImageG.Not();
-                    //newImageG = newImageG.And(tempImage);
-                    //newImageG = newImageG.Dilate(1);
-                    //    newImage = newImage.Copy(tempImage);
+                                y.ExtractFeatures(h);
+                                y.id = numberOfHands;
+                                x.Add(y);
 
-                    //  // newImageG = newImageG.Not();
-                    //    skin = newImageG;
-                    //   skin = skin.AbsDiff(oldImage);
-                    ////   tempImage2 = tempImage2.Copy(skin);
-                    //   newImage = newImage.Copy(skin);
-                    //skin =skin.ThresholdBinary(new Gray(15), MaxValue);
+                                numberOfHands++;
 
+                            }
+                            else
+                                Console.WriteLine("there is already 2 hands");
+                        }
+                        detected_hand.Clear();
 
-                    //   // skin = skin.SmoothMedian(5);
-
-                    //     skin = skin.Canny(cannyThreshold, cannyThresholdLinking);
-                    //     skin = skin.Dilate(1);
-                    ////   // skin = skin.PyrDown().PyrUp();
-
-
-
-
-                //    oldImage = newImageG;
-                    //     newImageG = newImageG.Canny(cannyThreshold, cannyThresholdLinking);
-                    //     newImageG = newImageG.Canny(new Gray(120), new Gray(180));
-
-                    //     newImageG = newImageG.Or(skin);
-
-                    //  newImageG = newImageG.And(skin);
-                    //  newImageG = newImageG.Dilate(2);
-
-
-
-                    //     //newImageG = newImageG.Erode(1);
-                    //    // newImageG = newImageG.Dilate(1);
-
-                    //newImageG = newImageG.And(tempImage);
-                    //newImageG = newImageG.Dilate(2);
-                    //     newImageG = newImageG.And(skin);
-
-
-
-                    //   newImageG = newImageG.Canny(cannyThreshold, cannyThresholdLinking);
-
-                    //  newImageG = newImageG.Or(oldImage);
-                    //    skin = skin.Canny(cannyThreshold, cannyThresholdLinking);
-
-                 //  CvInvoke.cvDistTransform(newImageG, distTransform, dt, kernel_size, null, IntPtr.Zero);
-                //    distTransform.MinMax(out minValues, out maxValues, out minLocation, out maxLocation);
-                    ExtractContourAndHull(newImageG);
-
-                    
-
-
-                    // newImageG = newImageG.And(skin);
+                    }
                 }
-                #endregion
-                //if (maxValues != null && maxValues.Length != 0)
-                //    for (int i = 0; i < maxValues.Length; i++)
-                //        Console.WriteLine(maxValues[i] + " @ " + maxLocation[i] + " max length " + maxValues.Length);
 
-
-                //minValues = null;
-                //maxValues = null;
-                //minLocation = null;
-                //maxLocation = null;
-               
+                sw.Stop();
+                elapsed_time = sw.Elapsed.TotalMilliseconds;
+           
+                sw.Reset();
                 imageBoxSkin.Image = newImage;
                 imageBoxFrameGrabber.Image = newImageG;
-               //handImage.Image = hand_sep;
-               //faceImage.Image = head_sep;
-            
-             
+
+
+
+
             }
         }
 
-        //private PointF MedianPoint()
-        //{
-            
-        //}
 
 
-        private void TrackingAndRelcocating(PointF[] previous_features_locals, PointF[] current_features_locals)
+    
+
+        /// <summary>
+        /// hand detection function 
+        /// </summary>
+        /// <param name="skin">a binary image that contains skin like objects</param>
+        /// <returns>a list that contains detected hands</returns>
+        private List<Contour<Point>> HandDetection(Image<Gray, byte> skin)
         {
-             int distTemp ;
-             double   Temp ;
-          //   bool ok = true;
+                        
+            Point first_peak = new Point(),
+                  first_valley = new Point(),
+                  reference_peak = new Point(),
+                  refernce_valley = new Point();
+
+            double[,] v1 = new double[2, 1],
+                      v2 = new double[2,1];
+
+            double angle;
+
+            int direction,
+                length,
+                mod;
+
+            bool tester_peak = false,
+                tester_valley = false;
 
 
-            for (int i = 0; i < current_features_locals.Length; i++)
-            {
-                
-                distTemp = 0;
-                Temp = 0.0;
-               // ok = true;
-                for (int j = 0; j < current_features_locals.Length; j++)
-                {
-                    if (i != j)
-                    {
-                        distTemp = (int)find_distance(current_features_locals[i],current_features_locals[j]);
-                        if(distTemp < 3)
-                        {
-                            if(! features_need_relocate.Contains(current_features[i]))
-                                this.features_need_relocate.Add(current_features_locals[i]);
-                            //ok = false;
-                            Temp = Double.MaxValue;
-                            break;
-                        }
-                        else
-                        {
-                           // best_tracked_feature_list.Add(current_features_locals[i]);
-                            double Vi = calc_velocity(current_features_locals[i],previous_features_locals[i]);
-                            double Vj = calc_velocity(current_features_locals[j],previous_features_locals[j]);
-                            double factor = FindVelocityFactor(Vi,Vj);
-                            double d = factor * distTemp;
-                            Temp += d;
-                            
 
-                        }
-                    }
-                }
-              //  if(ok)
-                 features.Add(i,Temp);
-            }
-        }
-
-        private double FindVelocityFactor(double Vi_local, double Vj_local)
-        {
-            double temp = Vj_local/(Vi_local+Vj_local);
-            return (temp * temp);
-            
-        }
-
-        private double calc_velocity(PointF pt1, PointF pt2)
-        {
-            //sw.Elapsed.TotalMilliseconds;
-            
-            return (find_distance(pt1, pt2)) / elapsed_time;
-        }
-
-
-        private /*List<PointF>*/PointF []  FindSkinFeatures(PointF[] current_features_local,byte [] found_features)
-        {
-            int tempX, tempY;
-           
-            Console.WriteLine("height " + newImageG.Height + " width " + newImageG.Width);
-            Console.WriteLine("# of features before skin " + current_features_local.Length);
-            for (int i = 0; i < current_features_local.Length; i++)
-            {
-                if (found_features[i] == 0)// feature i not found in current frame
-                {
-                    Console.WriteLine("feature "+i+" not found");
-                    continue;
-                }
-                else
-                {
-                    
-                    tempX = Convert.ToInt32(Math.Abs(current_features_local[i].X));
-                    tempY = Convert.ToInt32(Math.Abs(current_features_local[i].Y));
-                    Console.WriteLine("height " + tempX + " width " + tempY);
-                    if (/*tempX < height && tempY < width &&*/ newImageG[tempX, tempY].Intensity > 200 && rect.Contains(new Point(tempX,tempY)))
-                    {
-                        best_tracked_feature_list.Add(current_features_local[i]);
-                    }
-                    else
-                    {
-
-                        if (!this.features_need_relocate.Contains(current_features_local[i]))
-                            this.features_need_relocate.Add(current_features[i]);
-                    }
-                }
-            }
-                //foreach (PointF p in current_features_local)
-                //{
-                //    tempX = Convert.ToInt32(Math.Abs(p.X));
-                //    tempY = Convert.ToInt32(Math.Abs(p.Y));
-                //    Console.WriteLine("height " + tempX + " width " + tempY);
-                //    if()
-                ////    if (tempX < height && tempY < width && (int)newImageG.Data[tempX, tempY, 0] == 255)
-                ////    {
-                ////        best_tracked_feature_list.Add(p);
-                ////    }
-
-                //}
-                Console.WriteLine("inside FindSkinFeatures after Count is " + best_tracked_feature_list.Count);
-            return best_tracked_feature_list.ToArray();
-        }
-
-        static void Swap<T>(ref T lhs, ref T rhs)
-        {
-            T temp;
-            temp = lhs;
-            lhs = rhs;
-            rhs = temp;
-        }
-
-
-     //   private void RelocatePoints(PointF[] best_tracked_feature_local, PointF[] all_features, PointF center_point)
-     //   {
-     //       List<PointF> temp = new List<PointF>();
-     //       Console.WriteLine("inside RelocatePoints before Count is " + best_tracked_feature_list.Count);
-     //       for (int i = 0; i < all_features.Length; i++)
-     //       {
-     //           if (Array.IndexOf(best_tracked_feature_local, all_features[i]) < 0)
-     //           {
-     //               temp.Add(all_features[i]);
-     //               //best_tracked_feature_list.Add(all_features[i]);
-     //           }       
-     //       }
-           
-     ////       MessageBox.Show(temp.Count + "");
-     //       PointF middle = new PointF();
-     //       foreach (PointF pt in temp)
-     //       {
-     //           middle.X = (pt.X + center_point.X) / 2;
-     //           middle.Y = (pt.Y + center_point.Y) / 2;
-     //           best_tracked_feature_list.Add(middle);
-
-     //     //      MessageBox.Show(middle.X+ " next point "+middle.Y);
-     //      //     tempImage2.Draw(new CircleF(middle, 3.0f), new Gray(255), 1);
-     //     //     imageBox2.Image = tempImage2;
-
-     //       }
-
-     //       Console.WriteLine("inside RelocatePoints after Count is " + best_tracked_feature_list.Count);
-     //   }
-
-        private void RelocatePoints(PointF[] all_features, PointF center_point)
-        {
-            List<PointF> temp = all_features.ToList();
-            //Console.WriteLine("inside RelocatePoints before Count is " + best_tracked_feature_list.Count);
-            //for (int i = 0; i < all_features.Length; i++)
-            //{
-            //    if (Array.IndexOf(best_tracked_feature_local, all_features[i]) < 0)
-            //    {
-            //        temp.Add(all_features[i]);
-            //        //best_tracked_feature_list.Add(all_features[i]);
-            //    }       
-            //}
-
-            //       MessageBox.Show(temp.Count + "");
-            PointF middle = new PointF();
-            int index = 0;
-            foreach (PointF pt in all_features)
-            {
-                index = (best_tracked_feature_list.IndexOf(pt));
-                if (index > -1)
-                {
-                    best_tracked_feature_list.RemoveAt(index);
-                }
-                middle.X = (pt.X + center_point.X) / 2;
-                middle.Y = (pt.Y + center_point.Y) / 2;
-              
-                best_tracked_feature_list.Add(middle);
-
-                //      MessageBox.Show(middle.X+ " next point "+middle.Y);
-                //     tempImage2.Draw(new CircleF(middle, 3.0f), new Gray(255), 1);
-                //     imageBox2.Image = tempImage2;
-
-            }
-
-            Console.WriteLine("inside RelocatePoints after Count is " + best_tracked_feature_list.Count);
-        }
-               
-        private void ExtractContourAndHull(Image<Gray, byte> skin)
-        {
             using (MemStorage storage = new MemStorage())
             {
-                Contour<Point> temp;
-                
-                //Console.WriteLine("inside using");
-                
-                
+
+
+                handCandiate.Clear();
 
                 for (Contour<Point> i = skin.FindContours(Emgu.CV.CvEnum.CHAIN_APPROX_METHOD.CV_CHAIN_APPROX_SIMPLE,
-                                                          Emgu.CV.CvEnum.RETR_TYPE.CV_RETR_EXTERNAL, 
-                                                          storage); 
-                                    i != null; 
+                                                          Emgu.CV.CvEnum.RETR_TYPE.CV_RETR_EXTERNAL,
+                                                          storage);
+                                    i != null;
                                     i = i.HNext)
                 {
                     area = i.BoundingRectangle.Height * i.BoundingRectangle.Width;
 
-                 
-                    
-                    if (area > 3000 )
+
+                    if (area > 3000 && !(i.Convex))
                     {
+
+                        tester_peak = false;
+                        tester_valley = false;
+                        skin.ROI = i.BoundingRectangle;
                         
-                        //newImageG.Draw(i.GetMinAreaRect(), colorGray, 2);
-                      //  Console.WriteLine(i.GetMinAreaRect().size);
-                        pointsArray = i.ToArray();
+                        this.center_pt = FindCentroidByDistanceTrans(skin);
 
-                        for (int j = numberOfpoints; j < pointsArray.Length - numberOfpoints; j++)
+                        this.center_pt.X += skin.ROI.X;
+                        this.center_pt.Y += skin.ROI.Y;
+                        skin.ROI = Rectangle.Empty;
+
+                        Contour<Point> tt = i.ApproxPoly(accuracy, storage);
+                    
+                        LineSegment2D[] edges = PointCollection.PolyLine(tt.ToArray(), true);
+                     
+                  
+                        length = edges.Length;
+                        for (int ij = 0; ij < length; ij++)
                         {
-                          //  int d = 30 + j;
-                            //int middle = (int)(d - (30 / 2));
-                            //LineSegment2D first = new LineSegment2D(pointsArray[j],pointsArray[middle]);
-                            //LineSegment2D second = new LineSegment2D(pointsArray[middle], pointsArray[d]);
-
-                            double[,] v1 = new double[2, 1] { { pointsArray[j].X - pointsArray[j - numberOfpoints].X }, { pointsArray[j].Y - pointsArray[j - numberOfpoints].Y } };
-                            double[,] v2 = new double[2, 1] { { pointsArray[j].X - pointsArray[j + numberOfpoints].X }, { pointsArray[j].Y - pointsArray[j + numberOfpoints].Y } };
+                             mod = (ij+1)%length;
+                            
+                            v1[0, 0] = edges[ij].P2.X - edges[ij].P1.X;
+                            v1[1, 0] = edges[ij].P2.Y - edges[ij].P1.Y;
+                            v2[0, 0] = edges[mod].P1.X - edges[mod].P2.X;
+                            v2[1, 0] = edges[mod].P1.Y - edges[mod].P2.Y;
 
                             // this equation is quoted from http://www.mathworks.com/matlabcentral/newsreader/view_thread/276582
                             // and it is working very good
-                            double angle = Math.Atan2(Math.Abs(det(v1, v2)), dot(v1, v2)) * (180.0 / Math.PI);
-                            if (angle < 90 )
+                           
+                            angle = Math.Atan2(Math.Abs(det(v1, v2)), dot(v1, v2)) * (180.0 / Math.PI);
+
+                            if (angle < 90)
                             {
-                                count++;
-                              //  fingerCandiate.Add(pointsArray[middle]);
-                                     int direction = dir(pointsArray[j-numberOfpoints],pointsArray[j], pointsArray[j+numberOfpoints]);
-                                if(direction > 0)
+                                
+                                direction = dir(edges[ij].P1, edges[ij].P2, edges[mod].P2);
+
+                                if (direction > 0)
                                 {
-                                    newImage.Draw(new CircleF(pointsArray[j], 2), color2_brown, 2);//valley brown true
-                                    numberOfValleys++;
-                                    significantPts.Add(new KeyValuePair<Point, bool>(pointsArray[j], true));
+
+
+                                    if (
+                                        ((edges[ij].Length < max_length && edges[ij].Length > min_length)
+                                        ||
+                                        (edges[mod].Length < max_length && edges[mod].Length > min_length))
+ 
+                                        )
+                                    {
+                                     
+                                        if (!tester_valley )
+                                        {
+                                            tester_valley = true;
+                                            refernce_valley = edges[ij].P2;
+                                                                   
+                                            numberOfValleys++;
+
+                                        }
+                                        else if (FindDistance(edges[ij].P2, first_valley) < min_length 
+                                                && FindDistance(edges[ij].P2, first_valley) > (0.5 * min_length)
+                                              //  && FindDistance(edges[ij].P2,center_pts) > min_length
+                                            //    && FindDistance(edges[ij].P2, center_pts) < max_length 
+                                                )
+                                        {
+                                            if (tester_peak)
+                                            {
+                                                if (FindDistance(edges[ij].P2, first_peak) > min_length
+                                                    &&
+                                                    FindDistance(edges[ij].P2, first_peak) < max_length
+                                                    )
+                                                {
+
+
+                                                    numberOfValleys++;
+
+                                                }
+
+                                            }
+                                             
+
+
+                                        }
+                                        else if (FindDistance(edges[ij].P2, refernce_valley) < min_length
+                                                && FindDistance(edges[ij].P2, refernce_valley) > (0.5 * min_length)
+                                             //   && FindDistance(edges[ij].P2, center_pts) > min_length
+                                           //     && FindDistance(edges[ij].P2, center_pts) < max_length
+                                                )
+                                        {
+                                            numberOfValleys++;
+
+                                        }
+
+
+                                        first_valley = edges[ij].P2;
+
+                                    }
                                 }
+
                                 else
                                 {
-                                    newImage.Draw(new CircleF(pointsArray[j], 2), color_blue, 2);//peak blue false
-                                    numberOfPeaks++;
-                                    significantPts.Add(new KeyValuePair<Point, bool>(pointsArray[j], false));
+
+                                    
+                                   
+                                    if (
+                                        (edges[ij].Length < max_length && edges[ij].Length > min_length)
+                                             ||
+                                        (edges[mod].Length < max_length && edges[mod].Length > min_length)
+
+                                        )
+                                    {
+                                        if (!tester_peak)
+                                        {
+                                            tester_peak = true;
+                                             reference_peak = edges[ij].P2; 
+                                            numberOfPeaks++;
+                                       
+
+                                        }
+                                        else if (FindDistance(edges[ij].P2, first_peak) > min_length 
+                                                    && 
+                                                 FindDistance(edges[ij].P2, first_peak) < max_length)
+                                        {
+                                            if (tester_valley)
+                                            {
+
+                                                if (FindDistance(edges[ij].P2, first_valley) > min_length
+                                                    &&
+                                                    FindDistance(edges[ij].P2, first_valley) < max_length
+                                                    )
+                                                {
+
+                                                    numberOfPeaks++;
+
+                                                }
+
+                                            }
+
+                                        }
+
+                                        else if (FindDistance(edges[ij].P2, reference_peak) > min_length
+                                                    &&
+                                                 FindDistance(edges[ij].P2, reference_peak) < max_length)
+                                        {
+                                            numberOfPeaks++;
+
+                                        }
+
+                                        first_peak = edges[ij].P2;
+
+                                    }
+
                                 }
-                                
-                               // newImage.Draw(first, color, 1);//blue
-                            //    newImage.Draw(second, color2, 1);//brown
-                                j += numberOfpoints;
-                              //  Console.WriteLine(angle);
-                                
+
+
                             }
-                        }
-
-                        if (numberOfPeaks >= 5 && numberOfValleys >= 4)
-                        {
-                           
-
-                            handCandiate.Add(i);
 
                         }
-                        count = 0;
+
+                        if (numberOfPeaks >= 3 && numberOfValleys >= 3)
+                            {
+                                //double diff = CvInvoke.cvMatchShapes(i.Ptr, temp_contour.Ptr, CONTOURS_MATCH_TYPE.CV_CONTOUR_MATCH_I1, 0);
+
+                              //  if (diff < 0.1)
+                              //  {
+                                    newImage.Draw(i.BoundingRectangle, color_blue, 2);
+                                    imageBoxSkin.Image = newImage;
+                              
+                                    if (!hand_centers.Any())
+                                    {
+                                        hand_centers.Add(0, center_pt);
+                                    }
+                                    else
+                                    {
+                                        double dis = FindDistance(center_pt, hand_centers[0]);
+                                        if (dis < 200)
+                                            continue;
+                                        else
+                                            hand_centers.Add(1, center_pt);
+
+                                    }
+
+                                    Rectangle te = i.BoundingRectangle;
+                                    
+                                    int teHeight = (int)(max_length + min_length);
+                                   
+                                    if (te.Height > teHeight)
+                                        te.Height = teHeight;
+
+                                    if (te.Width > teHeight)
+                                        te.Width = teHeight;
+
+                                    skin.ROI = te;
+                                    Contour<Point> hand_ = ExtractBiggestContour(skin);
+
+                                    if (hand_ != null)
+                                    {
+
+                                        handCandiate.Add(hand_);
+
+                                    }
+
+
+                                    skin.ROI = Rectangle.Empty;
+                              //  }
+
+                            }
+
+
+                    //    }
+
+
                         numberOfPeaks = 0;
                         numberOfValleys = 0;
-                        
-                            //  temp = i.ApproxPoly(5.0);
-                            //    newImage.Draw(i, color, 2);
-                            //  i = i.ApproxPoly(10);//The subroutine ContourPerimeter() will take a contour and return its length.
-
-                            //pointsArray = temp.ToArray();
-                            //LineSegment2D[] edges = PointCollection.PolyLine(pointsArray, false);
-                            //for (int j = 0; j < edges.Length - 1; j++)
-                            //{
 
 
-                            //    double angle = Math.Abs(
-                            //      edges[j+1].GetExteriorAngleDegree(edges[j]));
-                            //    if (angle < 60 && angle > 10)
-                            //    {
-                            //        newImage.Draw(edges[j], color2, 1);
-                            //        newImage.Draw(edges[j + 1], color, 1);
-                            //    }
-                            //}
-
-                          //  newImage.Draw(i, color2, 1);
-                            //  int test = CvInvoke.cvCheckContourConvexity(temp);
-
-                            //  if (test == 0)
-                            //  {
-
-
-
-                           // convexityHull = i.GetConvexHull(Emgu.CV.CvEnum.ORIENTATION.CV_CLOCKWISE, storage);
-                           // defects = i.GetConvexityDefacts(storage, Emgu.CV.CvEnum.ORIENTATION.CV_CLOCKWISE);
-                           //// newImage.Draw(temp, color, 0);
-                           ////Console.WriteLine(defects.Total + "   "+i.Total);
-                           // foreach (MCvConvexityDefect test in defects)
-                           // {
-                           //    // newImage.Draw(new CircleF(test.DepthPoint, 5), color, 0);
-                           //    // newImage.Draw(new CircleF(test.StartPoint, 3), new Bgr(Color.White), 3);
-                           //   //  newImage.Draw(new CircleF(test.EndPoint, 3), new Bgr(Color.Black), 3);
-                           // }
-                                                                
-                            //if (temp.Total == 2)
-                            //{
-                            //    Point[] pts = i.ToArray();
-                            //    LineSegment2D[] edges = PointCollection.PolyLine(pts, false);
-                            //    double angle = Math.Abs(edges[1].GetExteriorAngleDegree(edges[0]));
-                                
-                            //    if (angle > 10 && angle < 90)
-                            //    {
-                            //        fingerCandidate.Add(new KeyValuePair<LineSegment2D, LineSegment2D>(edges[0], edges[1]));
-                                    
-                            //    }
-                            //}
-                            //newImageG.Draw(temp.GetMinAreaRect(), new Gray(100), 2);
-                          //  Console.WriteLine("inside if");
-                            
-                            //newImageG.Draw(temp, colorGray, 0);
-                            //newImageG.Draw(CvInvoke.cvBoundingRect(i, true), new Gray(100), 2);
-                      //  }
 
                     }
                 }
 
-               // var h = hhh.OrderByDescending(key => key.Value);
-                if (handCandiate.Count != 0)
+
+            }
+
+            return handCandiate;
+        }
+
+        /// <summary>
+        /// Extract the biggest Contour in the image 
+        /// </summary>
+        /// <param name="local">a binary image</param>
+        /// <returns>the biggest contour </returns>
+        private Contour<Point> ExtractBiggestContour(Image<Gray, byte> local)
+        {
+            Contour<Point> biggestContour = null;
+            MemStorage storage = new MemStorage();
+
+            Contour<Point> contours = FindContours(local, Emgu.CV.CvEnum.CHAIN_APPROX_METHOD.CV_CHAIN_APPROX_SIMPLE, Emgu.CV.CvEnum.RETR_TYPE.CV_RETR_LIST, storage);
+
+
+            Double Result1 = 0;
+            Double Result2 = 0;
+            while (contours != null)
+            {
+                Result1 = contours.Area;
+                if (Result1 > Result2)
                 {
-
-                    foreach (Contour<Point> hand in handCandiate)
-                    {
-                        newImage.Draw(hand, color2_brown, 2);
-                      //  newImage.Draw(hand.BoundingRectangle, color2_brown, 1);
-                        roi_rect = hand.BoundingRectangle;
-                        CvInvoke.cvSetImageROI(skin, roi_rect);
-                        distTransform = new Image<Gray, float>(roi_rect.Width, roi_rect.Height);
-                        CvInvoke.cvDistTransform(skin, distTransform, dt, kernel_size, null, IntPtr.Zero);
-                          distTransform.MinMax(out minValues, out maxValues, out minLocation, out maxLocation);
-                         
-                        
-                        if (maxValues != null && maxValues.Length != 0)
-                            for (int i = 0; i < maxValues.Length; i++)
-                            {
-                                Console.WriteLine(maxValues[i] + " @ " + maxLocation[i] + " max length " + maxValues.Length);
-                                newImage.Draw(new CircleF(maxLocation[i],Convert.ToSingle( maxValues[i])), color_blue, 2);
-                            }
-
-                        CvInvoke.cvResetImageROI(skin);
-                          minValues = null;
-                          maxValues = null;
-                          minLocation = null;
-                          maxLocation = null;
-                        //head_sep
-                        //if (maxLocation_Point != null && maxLocation_Point.Length != 0)
-                        //{
-                        //    double dist = hand.Distance(maxLocation_Point[0]);
-                        //    if (dist > 0)
-                        //        newImage.Draw(new CircleF(maxLocation_Point[0], 5), color_blue, 1);
-                        //}
-                        
-
-                    }
-
-                    //foreach (var key in sortedList)
-                    //{
-                    //    Console.WriteLine("{0}: {1}", key, hhh[key]);
-                    //}
-
+                    Result2 = Result1;
+                    biggestContour = contours;
                 }
-
-                handCandiate.Clear();
-                //foreach (Point t in fingerCandiate)
-                //{
-                //    newImage.Draw(new CircleF(t,2), color2, 2);
-                //}
-
-                //fingerCandiate.Clear();
-                //foreach (KeyValuePair<LineSegment2D, LineSegment2D> edgesTemp in fingerCandidate)
-                //{
-                //   // Console.WriteLine(count++);
-                //    newImage.Draw(new LineSegment2D(edgesTemp.Key.P2, edgesTemp.Value.P1), color, 2);
-                //}
-                //CvInvoke.cvDrawContours(newImageG, contours, new MCvScalar(255, 255, 255), new MCvScalar(100, 100, 100), 0, 0, Emgu.CV.CvEnum.LINE_TYPE.EIGHT_CONNECTED, new Point(0, 0));
-                
-                //for (Contour<Point> i = contours; i != null; i = i.HNext)
-                //{
-                //    area = i.BoundingRectangle.Height * i.BoundingRectangle.Width;
-                //    //PointCollection.BoundingRectangle(i.ToArray());
-
-
-                // //   if (area > 3000 )
-                //   // {
-                //     //   hand_sep = i.
-
-                //        temp = i.ApproxPoly(10);
-                //        newImage.Draw(temp.GetMinAreaRect(), new Bgr(Color.Chocolate), 2);
-                       
-                //     //   newImage.Draw(temp, new Bgr(Color.Chocolate), 2);
-                //      ///  newImage.Draw(CvInvoke.cvBoundingRect(i,true),new Bgr(Color.Black),2);
-                        
-                    
-                //   // }
-                //}
-
-
+                contours = contours.HNext;
 
             }
+
+            return biggestContour;
         }
 
-        private void draw_polyline(List<PointF> pts)
+        /// <summary>
+        /// find contours in the image
+        /// </summary>
+        /// <param name="local"> the image </param>
+        /// <param name="cHAIN_APPROX_METHOD">param provided to the opencv function</param>
+        /// <param name="rETR_TYPE">param provided to the opencv function</param>
+        /// <param name="stor">param provided to the opencv function </param>
+        /// <remarks>For more information about previous parameters and contours see opencv book chapter 8 And/Or opencv reference manual v2.1 March 18, 2010  page 343 </remarks>
+        /// <returns> the founded contours </returns>
+
+        private Contour<Point> FindContours(Image<Gray, byte> local, CHAIN_APPROX_METHOD cHAIN_APPROX_METHOD, RETR_TYPE rETR_TYPE, MemStorage stor)
         {
-            PointF[] simplified_ploy = pts.ToArray();
-            //int length = pts.Count;
-            //PointF original_point = new PointF(0.0F, 0.0F);
-            //int iteration = 1;
-            //PointF[] simplified_ploy = new PointF[pts.Count];
-            //simplified_ploy[0] = find_nearest_point(pts, original_point);
-
-            //pts.RemoveAt(pts.IndexOf(simplified_ploy[0]));
-            //simplified_ploy[0] = pts.ElementAt(0);
-            //MessageBox.Show(pts.Count + "before algorithem");
-            //PointF [] simplified_ploy = Utility.DouglasPeuckerReduction(pts, 10.0).ToArray();
-
-            //int length = simplified_ploy.Length;
-            //MessageBox.Show(length + "after algorithem");
-            //for (int i = 0; i < length; i++)
-            //{
-            //    LineSegment2DF line = new LineSegment2DF(simplified_ploy[i], simplified_ploy[(i + 1) % length]);
-            //    tempImage2.Draw(line, colorGray, 2);
-            //    MessageBox.Show("draw next line");
-            //    imageBoxFrameGrabber.Image = tempImage2;
-            //}
-
-            //LineSegment2DF line;
-            //for (; ; )
-            //{
-            //    //    if (i + 1 != 0)
-            //    //   {
-            //    if (iteration >= length)
-            //        break;
-            //    else
-            //    {
-            //        PointF nearest_point = find_nearest_point(pts, simplified_ploy[(iteration - 1)]);
-            //        simplified_ploy[iteration] = nearest_point;
-
-            //        pts.RemoveAt(pts.IndexOf(simplified_ploy[(iteration - 1)]));
-            //        iteration++;
-            //    }
-
-            //}
-
-           int length = simplified_ploy.Length;
-            for (int i = 0; i < length; i++)
+            using (Image<Gray, byte> imagecopy = local.Copy()) //since cvFindContours modifies the content of the source, we need to make a clone
             {
-                LineSegment2DF line = new LineSegment2DF(simplified_ploy[i], simplified_ploy[(i + 1) % length]);
-                tempImage2.Draw(line, colorGray, 2);
-            //    MessageBox.Show("draw next line");
-             //   Console.WriteLine(simplified_ploy[i] + "  " + simplified_ploy[(i + 1) % length]);
-                imageBoxFrameGrabber.Image = tempImage2;
+                IntPtr seq = IntPtr.Zero;
+                CvInvoke.cvFindContours(
+                    imagecopy.Ptr,
+                    stor.Ptr,
+                    ref seq,
+                    StructSize.MCvContour,
+                    rETR_TYPE,
+                    cHAIN_APPROX_METHOD,
+                    new Point(local.ROI.X, local.ROI.Y));// because of ROI, the contour is offset or shifted 
+
+                return (seq == IntPtr.Zero) ? null : new Contour<Point>(seq, stor);
             }
-            // line = new LineSegment2DF(pts[i], nearest_point);
-            //     }
-            //else
-            //{
-            //    line = new LineSegment2DF(pts[i], pts[(i + 1) % pts.Length]);
-            //}
-
-
-
         }
-
-        private PointF find_nearest_point(List<PointF> pts,PointF point)
+        /// <summary>
+        /// find the distance between 2 points using Euclidean distance law
+        /// </summary>
+        /// <param name="p1"><see cref="System.Drawing.Point"/>first point </param>
+        /// <param name="p2"><see cref="System.Drawing.Point"/>second point</param>
+        /// <returns>the real distance </returns>
+        /// <remarks>for more info. visit http://www.mathopenref.com/coorddist.html </remarks>
+        private double FindDistance(PointF p1, PointF p2)
         {
-            float min_dist = float.MaxValue,temp; 
-            PointF nearest_point = new PointF(), 
-                   current_point = point;
-
-            for (int j = 0; j < pts.Count; j++)
-            {
-                temp = find_distance(current_point, pts[j]);
-                if (temp < min_dist && temp != 0)
-                {
-                    min_dist = temp;
-                    nearest_point = pts[j];
-                }
-
-            }
-
-            return nearest_point;
+            double dx = p2.X - p1.X;
+            double dy = p2.Y - p1.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
         }
-
-        private float find_distance(PointF p1, PointF p2)
+        /// <summary>
+        /// perform distance transform for a binary (black and white ) image 
+        /// </summary>
+        /// <param name="binary_image">black and white image</param>
+        /// <returns>furthest white point from a black pixel/point</returns>
+        /// <remarks>for more info about cvDistTransform function see :- opencv reference manual v2.1 March 18, 2010 page 270 And/Or see opencv book chapter 6 page 205 </remarks>
+        private PointF FindCentroidByDistanceTrans(Image<Gray, byte> binary_image)
         {
-            float dx = p2.X - p1.X;
-            float dy = p2.Y - p1.Y;
-            return (float)Math.Sqrt(dx * dx + dy * dy);  
-        }
+            double max_value = 0.0d,
+                   min_value = 0.0d;
 
+            Point max_location = new Point(0, 0),
+                  min_location = new Point(0, 0);
 
-
-
-        public PointF FindCentroid(PointF[] Points)
-        {
-            // Add the first point at the end of the array.
-            int nuPoints = Points.Length;
-            PointF[] pts = new PointF[nuPoints + 1];
-            Points.CopyTo(pts, 0);
-            pts[nuPoints] = Points[0];
-
-            // Find the centroid.
-            float X = 0;
-            float Y = 0;
-            float second_factor;
-            for (int i = 0; i < nuPoints; i++)
-            {
-                second_factor =
-                    pts[i].X * pts[i + 1].Y -
-                    pts[i + 1].X * pts[i].Y;
-                X += (pts[i].X + pts[i + 1].X) * second_factor;
-                Y += (pts[i].Y + pts[i + 1].Y) * second_factor;
-            }
-
-            // Divide by 6 times the polygon's area.
-            float polygon_area = PolygonArea(Points);
-            X /= (6 * polygon_area);
-            Y /= (6 * polygon_area);
-
-            // If the values are negative, the polygon is
-            // oriented counterclockwise so reverse the signs.
-            if (X < 0)
-            {
-                X = -X;
-                Y = -Y;
-            }
-
-            return new PointF(X, Y);
-        }
-
-        public double SignedPolygonArea2(PointF[] polygon)
-        {
-            int N = polygon.Length;
-            int i, j;
-            double area = 0;
-
-            for (i = 0; i < N; i++)
-            {
-                j = (i + 1) % N;
-                area += polygon[i].X * polygon[j].Y;
-                area -= polygon[i].Y * polygon[j].X;
-            }
-            area /= 2.0;
-
-            //return (area);
-            return(area < 0 ? -area : area); //for unsigned
-        }
-
-
-        //public float PolygonArea(PointF[] Points)
-        //{
-        //    // Return the absolute value of the signed area.
-        //    // The signed area is negative if the polyogn is
-        //    // oriented clockwise.
-        //    return Math.Abs(SignedPolygonArea(Points));
-        //}
-
-        private float PolygonArea(PointF[] Points)
-        {
-            // Add the first point to the end.
-            int nuPoints = Points.Length;
-            PointF[] pts = new PointF[nuPoints + 1];
-            Points.CopyTo(pts, 0);
-            pts[nuPoints] = Points[0];
-
-            // Get the areas.
-            float area = 0;
-            for (int i = 0; i < nuPoints; i++)
-            {
-                area +=
-                    (pts[i + 1].X - pts[i].X) *
-                    (pts[i + 1].Y + pts[i].Y) / 2;
-            }
-
-            // Return the result.
-            return Math.Abs(area);
-        }
-
-
-        private PointF CenterPoint(PointF[] points)
-        {
-            float Cx = 0.0F, Cy = 0.0F, A = 0.0F, temp1 = 0.0F, temp2 = 0.0F, temp3 = 0.0F;
-            PointF []pts = new PointF[points.Length + 1];
-            points.CopyTo(pts, 0);
-            pts[points.Length] = points[0];
-            for (int i = 0; i < points.Length; i++)
+            using (Image<Gray, float> distTransform = new Image<Gray, float>(binary_image.Width, binary_image.Height))
             {
 
-                temp3 = ((pts[i].X * pts[i + 1].Y) - (pts[i + 1].X * pts[i].Y));
-                Cx += (pts[i].X + pts[i + 1].X) * temp3;
-                Cy += (pts[i].Y + pts[i + 1].Y) * temp3;
-            //    A += temp3;
-            }
-
-            A = Math.Abs((float)GetArea(points));
-         //   float temp4 = (1 / (6 * A));
-
-            Cx /= (6 * A);
-            Cy /= (6 * A);
-
-            return new PointF(Math.Abs(Cx), Math.Abs(Cy));
-
-        }
-
-        private int dir(Point point1, Point point2,Point point3)
-        {
-            //int horizontal_leg = point2.X - point1.X;
-            //int vertical_leg = point2.Y - point1.Y;
             
+                CvInvoke.cvDistTransform(binary_image, distTransform, dt, kernel_size, null, IntPtr.Zero);
+                CvInvoke.cvMinMaxLoc(distTransform, ref min_value, ref max_value, ref min_location, ref max_location, IntPtr.Zero);
 
-            //double result = Math.Atan2(vertical_leg, horizontal_leg) * (180.0 / Math.PI);
-        //    Console.WriteLine("x = " + horizontal_leg + " ; y = " + vertical_leg+" angle = "+result);
-           // return (result < 90 && result > 0) ? true : false; 
+                this.min_length = max_value;
+                this.max_length = 3 * max_value;
+            }
+
+
+
+     
+            return max_location;
+
+             }
+
+        /// <summary>
+        /// provide the direction of the angel of the middle point for 3 points (upperward or downward direction)
+        /// </summary>
+        /// <param name="point1"> <see cref="System.Drawing.Point"/>first point</param>
+        /// <param name="point2"><see cref="System.Drawing.Point"/>second point</param>
+        /// <param name="point3"><see cref="System.Drawing.Point"/>third point</param>
+        /// <returns>if the value is positive then the direction is opening upperward otherwise downward </returns>
+        private int dir(Point point1, Point point2, Point point3)
+        {
             //this equation is quoted from wikipedia http://en.wikipedia.org/wiki/Cross_product#Computational_geometry
             int result = ((point2.X - point1.X) * (point3.Y - point1.Y) - (point2.Y - point1.Y) * (point3.X - point1.X));
-           
-            return result;     
+
+            return result;
 
         }
 
+        /// <summary>
+        /// perform dot multiplication for a matrix or a vector
+        /// </summary>
+        /// <param name="v1">the first (one column)array or vector</param>
+        /// <param name="v2">the second (one column)array or vector</param>
+        /// <returns>the result </returns>
         private double dot(double[,] v1, double[,] v2)
         {
             return ((v1[0, 0] * v2[0, 0]) + (v1[1, 0] * v2[1, 0]));
         }
-
+        /// <summary>
+        /// find the determined of 2 matrix 
+        /// </summary>
+        /// <param name="v1">first matrix</param>
+        /// <param name="v2">second matrix</param>
+        /// <returns></returns>
         private double det(double[,] v1, double[,] v2)
         {
             return ((v1[0, 0] * v2[1, 0]) - (v1[1, 0] * v2[0, 0]));
         }
 
-        static double GetDeterminant(double x1, double y1, double x2, double y2)
-        {
-            return x1 * y2 - x2 * y1;
-        }
 
-        static double GetArea(PointF[] vertices)
-        {
-            if (vertices.Length < 3)
-            {
-                return 0;
-            }
-            double area = GetDeterminant(vertices[vertices.Length - 1].X, vertices[vertices.Length - 1].Y, vertices[0].X, vertices[0].Y);
-            for (int i = 1; i < vertices.Length; i++)
-            {
-                area += GetDeterminant(vertices[i - 1].X, vertices[i - 1].Y, vertices[i].X, vertices[i].Y);
-            }
-            return area / 2;
-        }
+
+        /// <summary>
+        /// keyboard keys events 
+        ///     Esc :- exit from the program
+        ///     + :- increase the value of threshold variable
+        ///     - :- decrease the value of threshold variable
+        ///     4 :- increase the accuracy value
+        ///     5 :- decrease the accuracy value
+        /// </summary>
+        /// <param name="sender">source of action (usually keyboard)</param>
+        /// <param name="e">the ascii value for the pressed button </param>
 
 
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyValue == 187)
+            
+            if (e.KeyValue == 187)// +
             {
                 if (threshold < 253)
                 {
                     threshold += 2;
                 }
+                else
+                    MessageBox.Show("threshold value can not be greater than 255");
             }
-            else if (e.KeyValue == 189)
+            else if (e.KeyValue == 189)// -
             {
                 if (threshold > 2)
                 {
+
                     threshold -= 2;
+                 
                 }
+                else
+                    MessageBox.Show("threshold can not be negative value");
             }
-            else if (e.KeyValue == 13)
-             {
-                
-              //  newImage.ROI = rect;
-              //  tempImage.ROI = rect;
-               //skin = new Image<Gray, byte>(rect.Width, rect.Height);
-                //tempImage2 = new Image<Gray, byte>(rect.Width, rect.Height,new Gray(0));
-            //    skin = tempImage;
-              //  detector.Process(newImage, tempImage);
-        //        newImageG = newImage.Convert<Gray, byte>();
-                //newImageG.ROI = rect;
-                CvInvoke.cvSetImageROI(newImageG, rect);
-                foundFeaturesInChannels = newImageG.GoodFeaturesToTrack(numbrt_of_features_tracked, quality, min_distance, block_size);
-                newImageG.FindCornerSubPix(foundFeaturesInChannels,new Size(10,10),new Size(-1,-1),new MCvTermCriteria(20,0.03));
-                CvInvoke.cvResetImageROI(newImageG);
-                //newImageG = newImageG.ThresholdBinary(new Gray(threshold), new Gray(255d));
-                //newImageG = newImageG.Not();
-                //newImageG = newImageG.And(tempImage);
-                //newImageG = newImageG.Dilate(1);
-              //  skin = newImageG;
-             //   MessageBox.Show(foundFeaturesInChannels[0].Length + "");
-                foreach (PointF p in foundFeaturesInChannels[0])
+            else if (e.KeyValue == 52)// 4
+            {
+                if(accuracy < 50)
+                    accuracy += .5;
+                else
+                    MessageBox.Show("accurcy value will exceed the recommended value");
+
+            }
+            else if (e.KeyValue == 53)// 5
+            {
+                if(accuracy > 0.5)
+                    accuracy -= .5;
+                else
+                    MessageBox.Show("accurcy can not be negative value ");
+
+            }
+
+            else if (e.KeyValue == 27)// esc
+            {
+                if (MessageBox.Show("Are you sure you want to exit?", "Hand Gesture Recognition", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation)
+                    == System.Windows.Forms.DialogResult.Yes)
                 {
-
-                   // if (newImageG[(int)p.X, (int)p.Y].Intensity == 255)
-                   // {
-                        best_tracked_feature_list.Add(p);
-                   // }
+                    this.Dispose();
+                   
                 }
-            //    best_tracked_feature_Array = best_tracked_feature_list.ToArray();
-
-                //box = PointCollection.MinAreaRect(best_tracked_feature_Array);
-                //center_pts = box.center;//FindCentroid(best_tracked_feature.ToArray());
-                //tempImage2.Draw(new CircleF(center_pts, 3.0f), new Gray(150), -1);
-                //RelocatePoints(best_tracked_feature_Array, foundFeaturesInChannels[0], center_pts);
-                //  imageBox2.Image = newImageG;
-                //   imageBoxFrameGrabber.Image = tempImage2;
-                //    Console.WriteLine(center_pts.X + " " + center_pts.Y);
-                //tempX = tempY = temp_length = 0;
-                previous_features = best_tracked_feature_list.ToArray();
-
-                Console.WriteLine("# of previous features " + previous_features.Length);
-                best_tracked_feature_list.Clear();
-                best_tracked_feature_Array = null;
-                //   flag = false;
-                start_tracking = true;
-                prev_image = current_image;
-                Console.WriteLine("cls");
-                //newImage.ROI = Rectangle.Empty;
-                //tempImage.ROI = Rectangle.Empty;
+            }
                 
-               // foundFeaturesInChannels[0].Initialize();                                                                          
-                flag = true;
-            }
-            else
-                MessageBox.Show("key pressed " + e.KeyValue.ToString());
-                  
-            
+           
+
         }
 
-        //private void seprate_Image(List<Contour<Point>> Saved)
-        //{
-        //    Rectangle ROI_rect = new Rectangle();
-        //   // MessageBox.Show("inside if "+Saved.Capacity);
-        //    if (Saved.Capacity == 4)
-        //    {
-               
-        //        Contour<Point> i = Saved.ElementAt<Contour<Point>>(0);
-        //        ROI_rect = CvInvoke.cvBoundingRect(i, true);
-        //        CvInvoke.cvSetImageROI(newImage, ROI_rect);
-        //        //newImage.ROI = ROI_rect;
-        //        hand_sep = newImage.Copy();
-
-        //        i = Saved.ElementAt<Contour<Point>>(1);
-        //        ROI_rect = CvInvoke.cvBoundingRect(i, true);
-        //        CvInvoke.cvSetImageROI(newImage, ROI_rect);
-        //        //newImage.ROI = ROI_rect;
-        //        head_sep = newImage.Copy();
-        //        CvInvoke.cvResetImageROI(newImage); 
-        //       // newImage.ROI = null;
-
-        //    }
-        //}
-
-      
-                                      
     }
 
-    public class PointSort : IComparer
-    {
-        public enum Mode
-        {
-            X,
-            Y
-        }
-
-        Mode currentMode = Mode.X;
-
-        public PointSort(Mode mode)
-        {
-            currentMode = mode;
-        }
-
-        //Comparing function
-        //Returns one of three values - 0 (equal), 1 (greater than), 2 (less than)
-        int IComparer.Compare(object a, object b)
-        {
-            PointF point1 = (PointF)a;
-            PointF point2 = (PointF)b;
-
-            if (currentMode == Mode.X) //Compare X values
-            {
-                if (point1.X > point2.X)
-                    return 1;
-                else if (point1.X < point2.X)
-                    return -1;
-                else
-                    return 0;
-            }
-            else
-            {
-                if (point1.Y > point2.Y) //Compare Y Values
-                    return 1;
-                else if (point1.Y < point2.Y)
-                    return -1;
-                else
-                    return 0;
-            }
-        }
-    }
 }
