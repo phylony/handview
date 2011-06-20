@@ -2,16 +2,12 @@
 using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Threading;
-using System.Text;
 using System.Windows.Forms;
 using Emgu.CV.Structure;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
-
-
+using AForge.Video.DirectShow;
 using System.Collections;
 using System.Runtime.InteropServices;
 
@@ -28,12 +24,12 @@ namespace HandGestureRecognition
         /// <summary>
         /// Set /Get the camera properties 
         /// </summary>
-        Capture grabber;
+        Capture grabber = null;
 
         /// <summary>
         /// Extract the skin  color like objects from an image
         /// </summary>
-        AdaptiveSkinDetector detector;
+        AdaptiveSkinDetector detector = null;
 
         /// <summary>
         /// Set /Get the image  width 
@@ -70,7 +66,7 @@ namespace HandGestureRecognition
         /// <summary>
         /// Number of hands required to be detected
         /// </summary>
-        int hand_detected = 1,
+        int hand_detected = 0,
             kernel_size = 3;
 
 
@@ -108,13 +104,13 @@ namespace HandGestureRecognition
         /// </summary>
         PointF center_pt;
 
-        static Image<Gray, byte> newImageG;
-        static Image<Gray, byte> current_image;
-        Image<Gray, byte> tempImage;
-    
+        static Image<Gray, byte> newImageG = null;
+        static Image<Gray, byte> current_image = null;
+        Image<Gray, byte> tempImage = null;
 
 
-        static Image<Bgr, byte> newImage;
+
+        static Image<Bgr, byte> newImage = null;
 
         HandTracking y;
 
@@ -126,7 +122,9 @@ namespace HandGestureRecognition
         List<HandTracking> x;
 
         Dictionary<int, PointF> hand_centers;
-
+       
+        private int camera_index;
+        
        
         /// <summary>
         /// Get <c> current_image </c> 
@@ -183,7 +181,7 @@ namespace HandGestureRecognition
             
 
             InitializeComponent();
-
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += DisplaySettingsChanged;
            
 
             x = new List<HandTracking>(2);
@@ -197,23 +195,34 @@ namespace HandGestureRecognition
             y = null;
 
 
-            height = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT);
-            width = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_WIDTH);
+            //height = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT);
+            //width = (int)grabber.GetCaptureProperty(Emgu.CV.CvEnum.CAP_PROP.CV_CAP_PROP_FRAME_WIDTH);
 
 
 
-            detector = new AdaptiveSkinDetector(1, AdaptiveSkinDetector.MorphingMethod.NONE);
+            //detector = new AdaptiveSkinDetector(1, AdaptiveSkinDetector.MorphingMethod.NONE);
 
 
-            tempImage = new Image<Gray, Byte>(width, height);
+            //tempImage = new Image<Gray, Byte>(width, height);
 
-            current_image = new Image<Gray, byte>(width, height);
+            //current_image = new Image<Gray, byte>(width, height);
 
-            newImageG = new Image<Gray, byte>(width, height);
+            //newImageG = new Image<Gray, byte>(width, height);
 
             sw = new System.Diagnostics.Stopwatch();
 
-            Application.Idle += new EventHandler(FrameGrabber);
+            Application.Idle += FrameGrabber;
+        }
+
+
+        void DisplaySettingsChanged(object sender, EventArgs e)
+        {
+            //     Console.WriteLine("The display settings changed.");
+            screen_height.Text = ": " + SystemInformation.PrimaryMonitorSize.Height;
+            screen_width.Text = ": " + SystemInformation.PrimaryMonitorSize.Width;
+            MessageBox.Show(this, "The screen resolution has been modified", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            // ChangeTooloStripLabel();
         }
 
         /// <summary>
@@ -788,6 +797,231 @@ namespace HandGestureRecognition
 
         }
 
+        private void cam_devices_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cam_devices.SelectedItem != null)
+            {
+
+                Size oldFrameSize = new Size(0, 0);
+                int oldMaxFrameRate = 0;
+                if (cam_capability.SelectedItem != null)
+                {
+                    oldFrameSize = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize;
+                    oldMaxFrameRate = ((DeviceCapabilityInfo)cam_capability.SelectedItem).MaxFrameRate;
+                }
+
+                cam_capability.Items.Clear();
+
+                int oldCapIndex = -1;
+                VideoCaptureDevice video = new VideoCaptureDevice(((DeviceInfo)cam_devices.SelectedItem).MonikerString);
+                for (int i = 0; i < video.VideoCapabilities.Length; i++)
+                {
+                    VideoCapabilities cap = video.VideoCapabilities[i];
+                    DeviceCapabilityInfo capInfo = new DeviceCapabilityInfo(cap.FrameSize, cap.MaxFrameRate);
+                    cam_capability.Items.Add(capInfo);
+                    if (oldFrameSize == capInfo.FrameSize && oldMaxFrameRate == capInfo.MaxFrameRate)
+                        oldCapIndex = i;
+                }
+
+                if (oldCapIndex == -1)
+                    oldCapIndex = 0;
+                cam_capability.SelectedIndex = oldCapIndex;
+
+                SelectCamera(((DeviceInfo)cam_devices.SelectedItem).Index);
+            }
+        }
+
+        private void SelectCamera(int camera_index)
+        {
+            if (grabber == null)
+            {
+                grabber = new Emgu.CV.Capture();
+                width = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize.Width;
+                height = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize.Height;
+                grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT, height);
+                grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_WIDTH, width);
+                InitializeImages(width, height);
+            }
+            else
+            {
+                Application.Idle -= FrameGrabber;
+                grabber.Dispose();
+                ReleaseData();
+
+                grabber = new Emgu.CV.Capture();
+                width = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize.Width;
+                height = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize.Height;
+                grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT, height);
+                grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_WIDTH, width);
+
+                InitializeImages(width, height);
+                Application.Idle += FrameGrabber;
+            }
+        }
+
+        private void cam_capability_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            //  SelectCamera(((DeviceInfo)cam_devices.SelectedItem).Index);
+            if (grabber != null)
+            {
+                Application.Idle -= FrameGrabber;
+                //  grabber.Dispose();
+                ReleaseData();
+
+                //   grabber = new Emgu.CV.Capture(camera_index);
+                width = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize.Width;
+                height = ((DeviceCapabilityInfo)cam_capability.SelectedItem).FrameSize.Height;
+                grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_HEIGHT, height);
+                grabber.SetCaptureProperty(CAP_PROP.CV_CAP_PROP_FRAME_WIDTH, width);
+
+                InitializeImages(width, height);
+                Application.Idle += FrameGrabber;
+            }
+        }
+
+        private void ReleaseData()
+        {
+            //if (grabber != null)
+            //    grabber.Dispose();
+            if (newImage != null)
+                newImage.Dispose();
+            if (newImageG != null)
+                newImageG.Dispose();
+            if (current_image != null)
+                current_image.Dispose();
+            if (tempImage != null)
+                tempImage.Dispose();
+            if (detector != null)
+                detector.Dispose();
+
+        }
+
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        {
+            if (grabber != null)
+                grabber.FlipHorizontal = !grabber.FlipHorizontal;
+        }
+
+        private void InitializeImages(int width, int height)
+        {
+            tempImage = new Image<Gray, Byte>(width, height);
+            newImageG = new Image<Gray, byte>(width, height);
+            newImage = new Image<Bgr, byte>(width, height);
+            current_image = new Image<Gray, byte>(width, height);
+            detector = new AdaptiveSkinDetector(1, AdaptiveSkinDetector.MorphingMethod.NONE);
+
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            screen_height.Text = ": " + SystemInformation.PrimaryMonitorSize.Height;
+            screen_width.Text = ": " + SystemInformation.PrimaryMonitorSize.Width;
+            //MessageBox.Show("Monitor Size:" + SystemInformation.PrimaryMonitorSize);
+            //MessageBox.Show("Monitor Height:" + SystemInformation.PrimaryMonitorSize.Height);
+            //MessageBox.Show("Monitor width:" + SystemInformation.PrimaryMonitorSize.Width);
+            //MessageBox.Show("VirtualScreen: " + SystemInformation.VirtualScreen);
+
+            FilterInfoCollection videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+            if (videoDevices != null && videoDevices.Count > 0)
+            {
+                int idx = 0;
+                foreach (FilterInfo device in videoDevices)
+                {
+                    cam_devices.Items.Add(new DeviceInfo(device.Name, device.MonikerString, idx));
+                    idx++;
+                }
+                cam_devices.SelectedIndex = camera_index = 0;
+            }
+
+            //cam_devices_SelectedIndexChanged(sender, e);
+            SelectCamera(camera_index);
+
+
+        }
+
+        private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            // Show the form when the user double clicks on the notify icon.
+
+            // Set the WindowState to normal if the form is minimized.
+            if (this.WindowState == FormWindowState.Minimized)
+                this.WindowState = FormWindowState.Normal;
+            if (checkBox2.CheckState == CheckState.Checked)
+                this.ShowInTaskbar = true;
+            // Activate the form.
+            this.Activate();
+        }
+
+        private void Form1_SizeChanged(object sender, EventArgs e)
+        {
+            // Check if the Form is minimized
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                // If the notifyIcon1 doesn't have a Icon then it won't show up!
+                // notifyIcon1.Icon = SystemIcons.Application;
+                notify_icon.BalloonTipText = "Your Form has minimized to tray";
+                notify_icon.ShowBalloonTip(1000);
+
+                if(checkBox2.CheckState == CheckState.Checked)
+                    this.ShowInTaskbar = false;
+            }
+        }
+
+        private void toolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                this.WindowState = FormWindowState.Normal;
+                if (checkBox2.CheckState == CheckState.Checked)
+                     this.ShowInTaskbar = true;
+            }
+        }
+
+        private void toolStripMenuItem3_Click(object sender, EventArgs e)
+        {
+            ReleaseData();
+            this.Dispose();
+        }
+
+    }
+
+
+    public struct DeviceInfo
+    {
+        public string Name;
+        public string MonikerString;
+        public int Index;
+
+
+        public DeviceInfo(string name, string monikerString, int index)
+        {
+            Name = name;
+            MonikerString = monikerString;
+            Index = index;
+
+        }
+
+        public override string ToString()
+        {
+            return Name;
+        }
+    }
+
+    public struct DeviceCapabilityInfo
+    {
+        public Size FrameSize;
+        public int MaxFrameRate;
+
+        public DeviceCapabilityInfo(Size frameSize, int maxFrameRate)
+        {
+            FrameSize = frameSize;
+            MaxFrameRate = maxFrameRate;
+        }
+
+        public override string ToString()
+        {
+            return string.Format("{0}x{1}  {2}fps", FrameSize.Width, FrameSize.Height, MaxFrameRate);
+        }
     }
 
 }

@@ -112,21 +112,27 @@
     <CodeAnalysisIgnoreBuiltInRules>false</CodeAnalysisIgnoreBuiltInRules>
     <CodeAnalysisFailOnMissingRules>false</CodeAnalysisFailOnMissingRules>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>App.ico</ApplicationIcon>
+  </PropertyGroup>
   <ItemGroup>
+    <Reference Include="AForge.Video">
+      <HintPath>..\emgu_dlls\AForge.Video.dll</HintPath>
+    </Reference>
+    <Reference Include="AForge.Video.DirectShow">
+      <HintPath>..\emgu_dlls\AForge.Video.DirectShow.dll</HintPath>
+    </Reference>
     <Reference Include="Emgu.CV, Version=2.1.0.793, Culture=neutral, PublicKeyToken=7281126722ab4438, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\emgucv 2.1.0.793\bin\Emgu.CV.dll</HintPath>
+      <HintPath>..\..\..\HandGestureRecognition_modified 2\HandGestureRecognition_modified 2\HandGestureRecognition\bin\Debug\Emgu.CV.dll</HintPath>
     </Reference>
     <Reference Include="Emgu.CV.UI, Version=2.1.0.793, Culture=neutral, PublicKeyToken=7281126722ab4438, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\emgucv 2.1.0.793\bin\Emgu.CV.UI.dll</HintPath>
+      <HintPath>..\..\..\HandGestureRecognition_modified 2\HandGestureRecognition_modified 2\HandGestureRecognition\bin\Debug\Emgu.CV.UI.dll</HintPath>
     </Reference>
     <Reference Include="Emgu.Util, Version=2.1.0.793, Culture=neutral, PublicKeyToken=7281126722ab4438, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files\emgucv 2.1.0.793\bin\Emgu.Util.dll</HintPath>
-    </Reference>
-    <Reference Include="HandGestureRecognition.SkinDetector">
-      <HintPath>..\HandGestureRecognition.SkinDetector\bin\Debug\HandGestureRecognition.SkinDetector.dll</HintPath>
+      <HintPath>..\..\..\HandGestureRecognition_modified 2\HandGestureRecognition_modified 2\HandGestureRecognition\bin\Debug\Emgu.Util.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -161,7 +167,9 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
-    <None Include="app.config" />
+    <None Include="app.config">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -173,9 +181,11 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="App.ico" />
     <Content Include="cvextern.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="project 7.txt" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
